@@ -17,38 +17,50 @@ class LabelGenerator():
 
     def __init__(self, dataset_name, bounding_box_init_method, image_display_method):
         self.load_tracker()
-        self.set_bounding_box = bounding_box_init_method
+        self.get_bounding_box = bounding_box_init_method
         self.display_image = image_display_method
         self.dataset_name = dataset_name 
+
         #load json dataset or create it if it doesn't exist
-        self.label_filename = "results/" + dataset_name + "/" + dataset_name + ".json"
-        if os.path.isfile(self.label_filename):
-            with open(self.label_filename, "r") as label_file:
-                self.labels = json.load(label_file)
+        self.dataset_filename  = "results/" + dataset_name + "/" + dataset_name + ".json"
+        if os.path.isfile(self.dataset_filename):
+            with open(self.dataset_filename, "r") as dataset_file:
+                self.dataset = json.load(dataset_file)
         else:
-            self.labels = self.initialize_labels()
+            self.dataset = self.initialize_dataset()
 
 
     def load_tracker(self):
         self.tracker = SiamRPNotb()
         self.tracker.load_state_dict(torch.load('tracker/SiamRPNOTB.model'))
-        self.tracker.eval() #check docs
+        self.tracker.eval()
         if torch.cuda.is_available():
             self.tracker.cuda()
 
 
     def generate_labels(self, video, class_name):
+        """
+        Add bounding box annotations to the dataset for a given video.
+
+        After the user selects the initial bounding box, the tracker
+        generates boxes for all frames in the rest of the video.
+        Some of the frames and annotations are saved to the dataset.
+
+        Tracking can be paused by pressing 'p'.
+        By pressing 'r' the user can reset the tracker by selecting the bbox
+        for the current frame.
+        """
         retval, first_frame = video.read()
         first_frame = imutils.resize(first_frame, width=600)
-        x, y, w, h = self.set_bounding_box(first_frame)
+        x, y, w, h = self.get_bounding_box(first_frame)
         center_x, center_y = x + w/2, y + h/2
         object_position = np.array([center_x, center_y])
         object_size = np.array([w, h])
         tracker_state = SiamRPN_init(first_frame, object_position, object_size, self.tracker)
 
         frame_id = 0
-        if len(self.labels["images"]) > 0:
-            frame_id = self.labels["images"][-1]["id"]
+        if len(self.dataset["images"]) > 0:
+            frame_id = self.dataset["images"][-1]["id"]
         category_id = self.add_category(class_name)
         
         count = 0
@@ -77,36 +89,43 @@ class LabelGenerator():
             elif key_pressed == ord("r"):
                 #reset tracker:
                 #select bbox for current frame and continue tracking
-                x, y, w, h = self.set_bounding_box(frame)
+                x, y, w, h = self.get_bounding_box(frame)
                 center_x, center_y = x + w/2, y + h/2
                 object_position = np.array([center_x, center_y])
                 object_size = np.array([w, h])
                 tracker_state = SiamRPN_init(frame, object_position, object_size, self.tracker)
                 paused = False
 
-        with open(self.label_filename, "w") as dataset_file:
-            json.dump(self.labels, dataset_file)
+        with open(self.dataset_filename, "w") as dataset_file:
+            json.dump(self.dataset, dataset_file)
         print("{} images have been added to '{}' dataset".format(count, self.dataset_name))
 
 
-    def label_image_manually(self, image, dataset_name, class_name):
+    def label_image_manually(self, image, class_name):
+        """
+        Select a bounding box for given image and add the
+        annotation and image to the dataset.
+        """
         image = imutils.resize(image, width=600)
-        x, y, w, h = self.set_bounding_box(image)
+        x, y, w, h = self.get_bounding_box(image)
         center_x, center_y = x + w/2, y + h/2
         object_position = np.array([center_x, center_y])
         object_size = np.array([w, h])
         height, width = image.shape[0], image.shape[1]
 
         image_id = 0
-        if len(self.labels["images"]) > 0:
-            image_id = self.labels["images"][-1]["id"] + 1
+        if len(self.dataset["images"]) > 0:
+            image_id = self.dataset["images"][-1]["id"] + 1
         print(image_id)
         category_id = self.add_category(class_name)
         self.save_image(image, class_name, image_id)
         self.add_label(category_id, width, height, image_id, [x, y, w, h])
 
+        with open(self.dataset_filename, "w") as dataset_file:
+            json.dump(self.dataset, dataset_file)
 
-    def initialize_labels(self):
+
+    def initialize_dataset(self):
         """
         Create basic structure for a COCO detection dataset json file.
         """
@@ -119,16 +138,17 @@ class LabelGenerator():
 
     def add_category(self, category_name):
         """
-        Add category to dataset json if it doesn't exist and return id of the category.
+        Add category to dataset json if it doesn't exist
+        and return id of the category.
         """
         max_id = 0
-        for cat in self.labels["categories"]:
+        for cat in self.dataset["categories"]:
            max_id = max(max_id, cat["id"])
            if cat["name"] == category_name: #category exists
                return cat["id"] 
 
         category_id = max_id + 1
-        self.labels["categories"].append({
+        self.dataset["categories"].append({
             "id": category_id,
             "name": category_name,
             "supercategory": "none"
@@ -136,48 +156,48 @@ class LabelGenerator():
         return category_id
 
 
-    def save_image(self, frame, class_name, frame_count):
+    def save_image(self, image, class_name, image_id):
         """
-        Save a a single frame to disk.
+        Save a a single image to disk.
         """
         if not os.path.isdir("results"):        
             os.mkdir("results")
         if not os.path.isdir("results/" + self.dataset_name):
             os.mkdir("results/" + self.dataset_name)
-        cv2.imwrite("results/" + self.dataset_name + "/" + str(frame_count) + ".jpg", frame)
+        cv2.imwrite("results/" + self.dataset_name + "/" + str(image_id) + ".jpg", image)
 
 
-    def add_label(self, category_id, frame_width, frame_height, frame_count, bbox):
+    def add_label(self, category_id, image_width, image_height, image_id, bbox):
         """
-        Save annotation and corresponding file info to json dataset.
+        Save bounding box annotation and file info to json dataset.
         """
-        frame_info = {
-            "id": frame_count,
-            "width": frame_width,
-            "height": frame_height,
-            "file_name": str(frame_count) + ".jpg"
+        image_info = {
+            "id": image_id,
+            "width": image_width,
+            "height": image_height,
+            "file_name": str(image_id) + ".jpg"
         }
-        self.labels["images"].append(frame_info)
+        self.dataset["images"].append(image_info)
         
-        if len(self.labels["annotations"]) > 0:
-            id = self.labels["annotations"][-1]["id"] + 1
+        if len(self.dataset["annotations"]) > 0:
+            annotation_id = self.dataset["annotations"][-1]["id"] + 1
         else:
-            id = 0
+            annotation_id = 0
         annotation_info = {
-            "id": id,
+            "id": annotation_id,
             "area": bbox[2] * bbox[3],
-            "image_id": frame_count,
+            "image_id": image_id,
             "bbox": bbox,
             "category_id": category_id
         }
-        self.labels["annotations"].append(annotation_info)
+        self.dataset["annotations"].append(annotation_info)
 
 
     def print_dataset_stats(self):
         print("dataset:", self.dataset_name)
-        print(" - {} categories".format(len(self.labels["categories"])))
-        print(" - {} images".format(len(self.labels["images"])))
-        print(" - {} annotations".format(len(self.labels["annotations"])))
+        print(" - {} categories".format(len(self.dataset["categories"])))
+        print(" - {} images".format(len(self.dataset["images"])))
+        print(" - {} annotations".format(len(self.dataset["annotations"])))
 
 
 def get_bounding_box(image):
@@ -208,7 +228,7 @@ def main():
     ap.add_argument("-d", "--dataset_name", type=str,
                     help="name of dataset where labels should be saved")
     ap.add_argument("-c", "--class", type=str, help="class name of object in video")
-    ap.add_argument("-p", "--preview", action="store_true",
+    ap.add_argument("-p", "--preview", action="store_true", #not implemented
                     help="preview only, labels and frames will not be saved")
     ap.add_argument("--dir", type=str,
                     help="create labels for all files in given directory")
@@ -224,15 +244,17 @@ def main():
         files = [args["dir"] + filename for filename in os.listdir(args["dir"])]
         if args["validation"]:
             for file in files:
+                if not os.path.isfile(file):
+                    continue
                 print(file)
                 image = cv2.imread(file)
-                label_generator.label_image_manually(image, args["dataset_name"], args["class"])
-            print("All images in {}/ have been labeled.".format(args["dir"]))
+                label_generator.label_image_manually(image, args["class"])
+            print("All images in {} have been labeled.".format(args["dir"]))
         else:
             for file in files:
                 video = cv2.VideoCapture(file)
-                label_generator.generate_labels(video, args["dataset_name"], args["class"])
-            print("Labels have been generated for all videos in {}/".format(args["dir"]))
+                label_generator.generate_labels(video, args["class"])
+            print("Labels have been generated for all videos in {}".format(args["dir"]))
     else:
         video = cv2.VideoCapture(args["video"])
         label_generator.generate_labels(video,  args["class"])
