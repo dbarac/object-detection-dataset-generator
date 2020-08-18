@@ -51,7 +51,7 @@ class LabelGenerator():
         for the current frame.
         """
         retval, first_frame = video.read()
-        first_frame = imutils.resize(first_frame, width=600)
+        first_frame = imutils.resize(first_frame, height=800)
         x, y, w, h = self.get_bounding_box(first_frame)
         center_x, center_y = x + w/2, y + h/2
         object_position = np.array([center_x, center_y])
@@ -71,7 +71,7 @@ class LabelGenerator():
                 retval, frame = video.read()
                 if retval == False:
                     break
-                frame = imutils.resize(frame, width=600)
+                frame = imutils.resize(frame, height=800)
                 frame_height, frame_width = frame.shape[0], frame.shape[1]
                 tracker_state = SiamRPN_track(tracker_state, frame)
                 result = cxy_wh_2_rect(tracker_state['target_pos'], tracker_state['target_sz'])
@@ -81,7 +81,7 @@ class LabelGenerator():
                     print(frame_id)
                     self.save_image(frame, class_name, frame_id)
                     self.add_label(category_id, frame_width, frame_height,
-                                   frame_id, [x, y, w, h])
+                                   frame_id, [[x, y, w, h]])
                     count += 1
             key_pressed = self.display_image(frame, x, y, w, h)
             if key_pressed == ord("p"):
@@ -106,12 +106,15 @@ class LabelGenerator():
         Select a bounding box for given image and add the
         annotation and image to the dataset.
         """
-        image = imutils.resize(image, width=600)
-        x, y, w, h = self.get_bounding_box(image)
-        center_x, center_y = x + w/2, y + h/2
-        object_position = np.array([center_x, center_y])
-        object_size = np.array([w, h])
+        image = imutils.resize(image, height=800)
         height, width = image.shape[0], image.shape[1]
+        cv2.imshow("COCO label generator", image)
+        cv2.waitKey(5)
+        n_boxes = input("How many bounding boxes? (default = 1):") or 1
+        n_boxes = int(n_boxes)
+        bboxes = []
+        for i in range(n_boxes):
+            bboxes.append(self.get_bounding_box(image))
 
         image_id = 0
         if len(self.dataset["images"]) > 0:
@@ -119,7 +122,8 @@ class LabelGenerator():
         print(image_id)
         category_id = self.add_category(class_name)
         self.save_image(image, class_name, image_id)
-        self.add_label(category_id, width, height, image_id, [x, y, w, h])
+
+        self.add_label(category_id, width, height, image_id, bboxes)
 
         with open(self.dataset_filename, "w") as dataset_file:
             json.dump(self.dataset, dataset_file)
@@ -167,7 +171,7 @@ class LabelGenerator():
         cv2.imwrite("results/" + self.dataset_name + "/" + str(image_id) + ".jpg", image)
 
 
-    def add_label(self, category_id, image_width, image_height, image_id, bbox):
+    def add_label(self, category_id, image_width, image_height, image_id, bboxes):
         """
         Save bounding box annotation and file info to json dataset.
         """
@@ -183,14 +187,18 @@ class LabelGenerator():
             annotation_id = self.dataset["annotations"][-1]["id"] + 1
         else:
             annotation_id = 0
-        annotation_info = {
-            "id": annotation_id,
-            "area": bbox[2] * bbox[3],
-            "image_id": image_id,
-            "bbox": bbox,
-            "category_id": category_id
-        }
-        self.dataset["annotations"].append(annotation_info)
+        for i in range(len(bboxes)):
+            bbox = bboxes[i]
+            annotation_info = {
+                "id": annotation_id,
+                "area": bbox[2] * bbox[3],
+                "iscrowd": 0,
+                "image_id": image_id,
+                "bbox": bbox,
+                "category_id": category_id
+            }
+            self.dataset["annotations"].append(annotation_info)
+            annotation_id += 1
 
 
     def print_dataset_stats(self):
@@ -212,6 +220,7 @@ def get_bounding_box(image):
         if selection != redo_selection:
             break
     x, y, w, h = selection
+    print(selection)
     return (x, y, w, h)
 
 
