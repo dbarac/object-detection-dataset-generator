@@ -43,7 +43,7 @@ class LabelGenerator():
             self.tracker.cuda()
 
 
-    def generate_labels(self, video, class_name):
+    def generate_labels(self, video, class_name, multiple):
         """
         Add bounding box annotations to the dataset for a given video.
 
@@ -55,64 +55,78 @@ class LabelGenerator():
         By pressing 'r' the user can reset the tracker by selecting the bbox
         for the current frame.
         """
+        video_name = video 
+        video = cv2.VideoCapture(video)
         retval, first_frame = video.read()
         first_frame = imutils.resize(first_frame, height=800)
-        x, y, w, h = self.get_bounding_box(first_frame)
-        center_x, center_y = x + w/2, y + h/2
-        object_position = np.array([center_x, center_y])
-        object_size = np.array([w, h])
-        tracker_state = SiamRPN_init(first_frame, object_position, object_size, self.tracker)
-
-        frame_id = 0
+        cv2.imshow("COCO label generator", first_frame)
+        cv2.waitKey(0)
+        first_frame_id = 0
         if len(self.dataset["images"]) > 0:
-            frame_id = self.dataset["images"][-1]["id"]
+            first_frame_id = self.dataset["images"][-1]["id"]
         category_id = self.add_category(class_name)
-        
-        count = 0
-        valid_count = 0 #count of images with low enough blur
-        paused = False
-        while True:
-            if not paused:
-                frame_id += 1
-                retval, frame = video.read()
-                if retval == False:
-                    break
-                frame = imutils.resize(frame, height=800)
-                frame_height, frame_width = frame.shape[0], frame.shape[1]
-                tracker_state = SiamRPN_track(tracker_state, frame)
-                result = cxy_wh_2_rect(tracker_state['target_pos'], tracker_state['target_sz'])
-                x, y, w, h = [int(i) for i in result]
+
+        if multiple:
+            n_objects = int(input("How many objects to track? "))
+        else:
+            n_objects = 1
                 
-                #check bbox blur, save if metric > treshold:
-                roi = frame[y:y+h, x:x+w].copy()
-                roi_gray = cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY)
-                roi_normalized = cv2.resize(roi_gray, dsize=(64,64))
-                #variance of laplacian
-                blur_metric = cv2.Laplacian(roi_normalized, cv2.CV_64F).var()
-                treshold = 22.5
-                #frame_id % 5 == 0
-                if blur_metric > treshold:
-                    valid_count += 1
-                if blur_metric > treshold and valid_count % 3 == 0:
-                    print(frame_id)
-                    self.save_image(frame, class_name, frame_id)
-                    self.add_label(category_id, frame_width, frame_height,
-                                   frame_id, [[x, y, w, h]])
-                    count += 1
-            key_pressed = self.display_image(frame, x, y, w, h)
-            if key_pressed == ord("p"):
-                paused = not paused
-            elif key_pressed == ord("r"):
-                #reset tracker:
-                #select bbox for current frame and continue tracking
-                x, y, w, h = self.get_bounding_box(frame)
-                center_x, center_y = x + w/2, y + h/2
-                object_position = np.array([center_x, center_y])
-                object_size = np.array([w, h])
-                tracker_state = SiamRPN_init(frame, object_position, object_size, self.tracker)
-                paused = False
-            elif key_pressed == ord("n"): #next video
-                break 
+        for i in range(n_objects):
+            video = cv2.VideoCapture(video_name)
+            retval, first_frame = video.read()
+            print("Select bounding box for {}. item".format(i))
+            x, y, w, h = self.get_bounding_box(first_frame)
+            center_x, center_y = x + w/2, y + h/2
+            object_position = np.array([center_x, center_y])
+            object_size = np.array([w, h])
+            tracker_state = SiamRPN_init(first_frame, object_position, object_size, self.tracker)
+
+            frame_id = first_frame_id       
+            count = 0
+            valid_count = 0 #count of images with low enough blur
+            paused = False
+            while True:
+                if not paused:
+                    frame_id += 1
+                    retval, frame = video.read()
+                    if retval == False:
+                        break
+                    frame = imutils.resize(frame, height=800)
+                    frame_height, frame_width = frame.shape[0], frame.shape[1]
+                    tracker_state = SiamRPN_track(tracker_state, frame)
+                    result = cxy_wh_2_rect(tracker_state['target_pos'], tracker_state['target_sz'])
+                    x, y, w, h = [int(i) for i in result]
+                    
+                    #check bbox blur, save if metric > treshold:
+                    roi = frame[y:y+h, x:x+w].copy()
+                    roi_gray = cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY)
+                    roi_normalized = cv2.resize(roi_gray, dsize=(64,64))
+                    #variance of laplacian
+                    blur_metric = cv2.Laplacian(roi_normalized, cv2.CV_64F).var()
+                    treshold = 23.2
+                    #frame_id % 5 == 0
+                    if blur_metric > treshold:
+                        valid_count += 1
+                    if blur_metric > treshold and valid_count % 3 == 0:
+                        print(frame_id)
+                        self.save_image(frame, class_name, frame_id)
+                        self.add_label(category_id, frame_width, frame_height,
+                                       frame_id, [[x, y, w, h]])
+                        count += 1
+                key_pressed = self.display_image(frame, x, y, w, h)
+                if key_pressed == ord("p"):
+                    paused = not paused
+                elif key_pressed == ord("r"):
+                    #reset tracker:
+                    #select bbox for current frame and continue tracking
+                    x, y, w, h = self.get_bounding_box(frame)
+                    center_x, center_y = x + w/2, y + h/2
+                    object_position = np.array([center_x, center_y])
+                    object_size = np.array([w, h])
+                    tracker_state = SiamRPN_init(frame, object_position, object_size, self.tracker)
+                    paused = False
+                elif key_pressed == ord("n"): #next video
+                    break 
 
         with open(self.dataset_filename, "w") as dataset_file:
             json.dump(self.dataset, dataset_file)
@@ -193,13 +207,18 @@ class LabelGenerator():
         """
         Save bounding box annotation and file info to json dataset.
         """
-        image_info = {
-            "id": image_id,
-            "width": image_width,
-            "height": image_height,
-            "file_name": str(image_id) + ".jpg"
-        }
-        self.dataset["images"].append(image_info)
+        exists = False
+        for img in self.dataset["images"]:
+            if img["id"] == image_id:
+                exists = True
+        if not exists:
+            image_info = {
+                "id": image_id,
+                "width": image_width,
+                "height": image_height,
+                "file_name": str(image_id) + ".jpg"
+            }
+            self.dataset["images"].append(image_info)
         
         if len(self.dataset["annotations"]) > 0:
             annotation_id = self.dataset["annotations"][-1]["id"] + 1
@@ -261,6 +280,9 @@ def main():
                     help="create labels for all files in given directory")
     ap.add_argument("--validation", action="store_true",
                     help="manually select all bounding boxes for validation")
+    ap.add_argument("--multiple", "-m", action="store_true",
+                    help="for videos with multiple objects:"
+                         "tracker will run once for each object")
     args = vars(ap.parse_args())
     print(args)
 
@@ -280,11 +302,11 @@ def main():
         else:
             for file in files:
                 video = cv2.VideoCapture(file)
-                label_generator.generate_labels(video, args["class"])
+                label_generator.generate_labels(video, args["class"], args["multiple"])
             print("Labels have been generated for all videos in {}".format(args["dir"]))
     else:
         video = cv2.VideoCapture(args["video"])
-        label_generator.generate_labels(video,  args["class"])
+        label_generator.generate_labels(args["video"],  args["class"], args["multiple"])
     label_generator.print_dataset_stats()
 
 
