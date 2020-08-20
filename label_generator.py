@@ -21,6 +21,11 @@ class LabelGenerator():
         self.display_image = image_display_method
         self.dataset_name = dataset_name 
 
+        #create dataset directory if it doesn't exist
+        if not os.path.isdir("results"):        
+            os.mkdir("results")
+        if not os.path.isdir("results/" + self.dataset_name):
+            os.mkdir("results/" + self.dataset_name)
         #load json dataset or create it if it doesn't exist
         self.dataset_filename  = "results/" + dataset_name + "/" + dataset_name + ".json"
         if os.path.isfile(self.dataset_filename):
@@ -64,6 +69,7 @@ class LabelGenerator():
         category_id = self.add_category(class_name)
         
         count = 0
+        valid_count = 0 #count of images with low enough blur
         paused = False
         while True:
             if not paused:
@@ -77,7 +83,17 @@ class LabelGenerator():
                 result = cxy_wh_2_rect(tracker_state['target_pos'], tracker_state['target_sz'])
                 x, y, w, h = [int(i) for i in result]
                 
-                if frame_id % 5 == 0:
+                #check bbox blur, save if metric > treshold:
+                roi = frame[y:y+h, x:x+w].copy()
+                roi_gray = cv2.cvtColor(roi, cv2.COLOR_RGB2GRAY)
+                roi_normalized = cv2.resize(roi_gray, dsize=(64,64))
+                #variance of laplacian
+                blur_metric = cv2.Laplacian(roi_normalized, cv2.CV_64F).var()
+                treshold = 22.5
+                #frame_id % 5 == 0
+                if blur_metric > treshold:
+                    valid_count += 1
+                if blur_metric > treshold and valid_count % 3 == 0:
                     print(frame_id)
                     self.save_image(frame, class_name, frame_id)
                     self.add_label(category_id, frame_width, frame_height,
@@ -95,6 +111,8 @@ class LabelGenerator():
                 object_size = np.array([w, h])
                 tracker_state = SiamRPN_init(frame, object_position, object_size, self.tracker)
                 paused = False
+            elif key_pressed == ord("n"): #next video
+                break 
 
         with open(self.dataset_filename, "w") as dataset_file:
             json.dump(self.dataset, dataset_file)
