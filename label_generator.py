@@ -302,7 +302,7 @@ def main():
         else:
             for file in files:
                 video = cv2.VideoCapture(file)
-                label_generator.generate_labels(video, args["class"], args["multiple"])
+                label_generator.generate_labels(file, args["class"], args["multiple"])
             print("Labels have been generated for all videos in {}".format(args["dir"]))
     else:
         video = cv2.VideoCapture(args["video"])
