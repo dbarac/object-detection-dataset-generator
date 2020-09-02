@@ -7,12 +7,20 @@ import torch
 import imutils
 import numpy as np
 
+#check if necessary environment variables are set
+env_vars = os.environ.copy()
+if "PYSOTPATH" not in env_vars:
+    print("Error: $PYSOTPATH needs to be set to find pysot trackers and config")
+    exit(1)
+if "PYTHONPATH" not in env_vars:
+    print("Error: /path/to/pysot needs to be in $PYTHONPATH find the pysot package")
+    exit(1)
+
 from pysot.core.config import cfg
 from pysot.models.model_builder import ModelBuilder
 from pysot.tracker.tracker_builder import build_tracker
 
 torch.set_num_threads(1)
-print(os.path.expandvars("$PYSOTPATH"))
 
 class LabelGenerator():
     """Generate labels in COCO format for object detection"""
@@ -35,6 +43,7 @@ class LabelGenerator():
                 self.dataset = json.load(dataset_file)
         else:
             self.dataset = self.initialize_dataset()
+
 
     @staticmethod
     def load_tracker(tracker_config, tracker_snapshot):
@@ -66,7 +75,7 @@ class LabelGenerator():
         cv2.waitKey(2)
         n_objects = int(input())
         for i in range(n_objects):
-            print("Tracking object", i)
+            print("Tracking object", i+1)
             self.generate_labels(video_path, class_name, remember_saved_frames=True)
 
 
@@ -91,7 +100,7 @@ class LabelGenerator():
         self.tracker.init(first_frame, [x, y, w, h])
 
         frame_count = 0
-        frames_to_skip = 5 #to avoid saving each frame
+        frames_to_skip = 10 #to avoid saving each frame
         saved_frames = 0
         valid_count = 0 #count of frames with low blur
         paused = False
@@ -157,7 +166,7 @@ class LabelGenerator():
         roi_normalized = cv2.resize(roi_gray, dsize=(64,64))
 
         variance_of_laplacian = cv2.Laplacian(roi_normalized, cv2.CV_64F).var()
-        print(variance_of_laplacian)
+        print("Variance of laplacian:", variance_of_laplacian)
         threshold = 22.5
         if variance_of_laplacian < threshold:
             return True
@@ -204,7 +213,7 @@ class LabelGenerator():
 
     def add_category(self, category_name):
         """
-        Add category to dataset json if it doesn't exist
+        Add object category to dataset json if it doesn't exist
         and return id of the category.
         """
         max_id = 0
@@ -298,7 +307,7 @@ def get_bounding_box(image):
         if selection != redo_selection:
             break
     x, y, w, h = selection
-    print(selection)
+    #print(selection)
     return (x, y, w, h)
 
 
@@ -362,19 +371,26 @@ def main():
     label_generator = LabelGenerator(args["dataset"],
                                      bounding_box_init_method=get_bounding_box,
                                      image_display_method=display_frame)
+
+    #run depending on configuration
     if args["dir"]:
         files = [args["dir"] + filename for filename in os.listdir(args["dir"])]
         if args["validation"]:
-            for image_file in files:
+            for i, image_file in enumerate(files):
                 if not os.path.isfile(image_file):
                     continue
                 print(image_file)
                 label_generator.label_image_manually(image_file, args["class"])
+                print("{}/{} images saved.".format(i+1, len(files)))
             print("All images in {} have been labeled.".format(args["dir"]))
         else:
-            for video_file in files:
-                label_generator.generate_labels(video_file, args["class"],
-                                                args["discard_blurry_frames"])
+            for i, video_file in enumerate(files):
+                if args["multi_object"]:
+                    label_generator.generate_multi_object_labels(video_file, args["class"])
+                else:
+                    label_generator.generate_labels(video_file,  args["class"],
+                                                    args["discard_blurry_frames"])
+                print("{}/{} videos processed".format(i+1, len(files)))
             print("Labels have been generated for all videos in {}".format(args["dir"]))
     else:
         video_file = args["video"]
