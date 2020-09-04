@@ -29,18 +29,18 @@ the class for the selected object. Images and a COCO json file will be
 saved in the results/ directory:
 
 ```bash
-$ python label_generator.py --video example_data/train/VID_20200730_151459.mp4 --dataset uticnice --class uticnica
+$ python coco_dataset_generator.py --video example_data/train/VID_20200730_151459.mp4 --dataset uticnice --class uticnica
 ```
 
 Generate boxes for all videos in the selected directory and discard blurry frames:
 ```bash
-$ python label_generator.py --dir example_data/train/ --dataset uticnice --class uticnica --discard_blurry_frames
+$ python coco_dataset_generator.py --dir example_data/train/ --dataset uticnice --class uticnica --discard_blurry_frames
 ```
 
 Manually select bounding boxes for all images in a directory:
 
 ```bash
-$ python label_generator.py --manual --dir example_data/valid/ --dataset uticnice_valid --class uticnica
+$ python coco_dataset_generator.py --manual --dir example_data/valid/ --dataset uticnice_valid --class uticnica
 ```
 
 If the selected bounding box was incorrect press 'c' to cancel and select it again.
@@ -48,3 +48,5 @@ Tracking can be paused by pressing 'p'.
 Pressing 'r' during tracking resets the tracker - user selects a bbox for the current frame so the tracker
 can continue.
 Pressing 'n' ends the current video.
+
+This project was tested with Python 3.7.6 and package versions found in requirements.txt
