@@ -5,7 +5,7 @@ This tool uses a deep learning tracker to generate bounding box annotations for 
 ## Prerequisites
 This tool requires [pysot](https://github.com/STVIR/pysot) and the [siammask_e](https://github.com/baoxinchen/siammask_e)
 add-on for pysot. Steps for installation are below.
-1. Install requirements (pytorch, opencv, numpy, imutils)
+1. Install requirements
    ```bash 
    $ pip install -r requirements.txt
    ```
