@@ -382,23 +382,21 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("-v", "--video", type=str, help="path to input video file")
     ap.add_argument("-d", "--dataset", type=str,
-                    help="name of dataset where labels should be saved")
+                    help="name of dataset where annotations should be saved")
     ap.add_argument("-c", "--class", type=str, help="class name of object in video")
-    ap.add_argument("-p", "--preview", action="store_true", #not implemented
-                    help="preview only, labels and frames will not be saved")
     ap.add_argument("--dir", type=str,
-                    help="create labels for all files in given directory")
-    ap.add_argument("--validation", action="store_true",
-                    help="manually select all bounding boxes for validation")
+                    help="create annotations for all files in given directory")
+    ap.add_argument("--manual", action="store_true",
+                    help="manually select all bounding boxes (used for image directories)")
     ap.add_argument("--discard_blurry_frames", action="store_true",
-                    help="discard frame if area inside the bbox is blurry, off by default")
+                    help="discard frame if area inside the bbox is blurry (off by default)")
     ap.add_argument("--multi_object", action="store_true",
                     help="track multiple objects in the same video (run tracker once for each object)")
     ap.add_argument("--tracker_config", type=str,
-                    help="config file for pysot tracker settings, set to SiamMask_e by default",
+                    help="config file for pysot tracker settings (set to SiamMask_E by default)",
                     default=os.path.expandvars("$PYSOTPATH/experiments/siammaske_r50_l3/config.yaml"))
     ap.add_argument("--tracker_snapshot", type=str,
-                    help="pysot tracker .pth snapshot location, set to SiamMask_e by default",
+                    help="pysot tracker .pth snapshot location (set to SiamMask_E by default)",
                     default=os.path.expandvars("$PYSOTPATH/experiments/siammaske_r50_l3/model.pth"))
     args = vars(ap.parse_args())
     
@@ -406,9 +404,9 @@ def main():
     print(" - video:", args["video"])
     print(" - dataset:", args["dataset"])
     print(" - class:", args["class"])
-    print(" - preview:", args["preview"])
     print(" - directory:", args["dir"])
     print(" - multi object:", args["multi_object"])
+    print(" - manual", args["manual"])
     print(" - discard blurry frames:", args["discard_blurry_frames"])
     print(" - tracker config:", args["tracker_config"])
     print(" - tracker model snapshot:", args["tracker_snapshot"])
@@ -419,7 +417,7 @@ def main():
     #run with given configuration
     if args["dir"]:
         files = [args["dir"] + filename for filename in os.listdir(args["dir"])]
-        if args["validation"]:
+        if args["manual"]:
             for i, image_file in enumerate(files):
                 if not os.path.isfile(image_file):
                     continue
@@ -437,6 +435,7 @@ def main():
                 print("{}/{} videos processed".format(i+1, len(files)))
             print("Labels have been generated for all videos in {}".format(args["dir"]))
     else:
+        assert args["manual"] == False #manual annotation is only for image dirs
         video_file = args["video"]
         if args["multi_object"]:
             dataset_generator.annotate_multi_object_video(video_file, args["class"])
