@@ -245,13 +245,11 @@ class COCODatasetGenerator():
         Args:
           - category_name (str)
         """
-        max_id = 0
         for cat in self.dataset["categories"]:
-           max_id = max(max_id, cat["id"])
            if cat["name"] == category_name: #category exists
                return cat["id"] 
 
-        category_id = max_id + 1
+        category_id = len(self.dataset["categories"])
         self.dataset["categories"].append({
             "id": category_id,
             "name": category_name,
@@ -276,7 +274,7 @@ class COCODatasetGenerator():
 
     def save_image_info(self, image, image_name):
         """
-        Save image info to json COCO dataset.
+        Save image info to json COCO dataset (if not already saved).
         Return image id.
 
         Args:
@@ -289,9 +287,7 @@ class COCODatasetGenerator():
                     return image["id"]
 
         height, width = image.shape[0], image.shape[1]
-        image_id = 0
-        if len(self.dataset["images"]) > 0:
-            image_id = self.dataset["images"][-1]["id"] + 1
+        image_id = len(self.dataset["images"])
 
         image_info = {
             "id": image_id,
@@ -311,9 +307,7 @@ class COCODatasetGenerator():
           - bboxes (List[List[int]])
           - category_id (int)
         """
-        annotation_id = 0
-        if len(self.dataset["annotations"]) > 0:
-            annotation_id = self.dataset["annotations"][-1]["id"] + 1
+        annotation_id = len(self.dataset["annotations"])
 
         for bbox in bboxes:
             annotation_info = {
@@ -406,7 +400,7 @@ def main():
     print(" - class:", args["class"])
     print(" - directory:", args["dir"])
     print(" - multi object:", args["multi_object"])
-    print(" - manual", args["manual"])
+    print(" - manual:", args["manual"])
     print(" - discard blurry frames:", args["discard_blurry_frames"])
     print(" - tracker config:", args["tracker_config"])
     print(" - tracker model snapshot:", args["tracker_snapshot"])

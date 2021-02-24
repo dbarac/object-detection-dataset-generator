@@ -1,6 +1,6 @@
-# COCO object detection dataset generator
+# object detection dataset generator
 
-This tool uses a deep learning tracker to generate bounding box annotations for detection datasets.
+This tool uses a deep learning tracker to generate bounding box annotations for detection datasets (COCO format).
 
 ## Prerequisites
 This tool requires [pysot](https://github.com/STVIR/pysot) and the [siammask_e](https://github.com/baoxinchen/siammask_e)
